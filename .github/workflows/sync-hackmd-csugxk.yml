@@ -1,8 +1,8 @@
-name: sync hackmmd csugxk
+name: sync hackmd csugxk
 
 on:
   schedule:
-    # Runs at 04:00 China time (UTC+8) => 20:00 UTC (previous day)
+    # 04:00 China time (UTC+8) => 20:00 UTC (previous day)
     - cron: "0 20 * * *"
   workflow_dispatch: {}
 
@@ -11,7 +11,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: sync-hackmd-gxk
+  group: sync-hackmd-csugxk
   cancel-in-progress: true
 
 jobs:
@@ -21,58 +21,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download HackMD markdown
+      - name: Download HackMD markdown and write to 公选课/README.md
         shell: bash
         run: |
           set -euo pipefail
-
           URL="https://hackmd.io/@iljy/csugxk/download"
-          mkdir -p "公选课"
+          TARGET="公选课/README.md"
+
+          # Fail fast if path doesn't exist (prevents unicode/path surprises)
+          if [ ! -f "$TARGET" ]; then
+            echo "ERROR: Target file does not exist: $TARGET"
+            echo "README.md candidates:"
+            find . -maxdepth 5 -name README.md -print
+            exit 3
+          fi
 
           tmp="$(mktemp)"
           curl -fsSL "$URL" -o "$tmp"
 
-          # Sanity check: avoid committing HTML pages by accident
+          # Sanity check: avoid committing HTML pages
           if head -n 5 "$tmp" | grep -qi "<!doctype html\|<html"; then
             echo "Downloaded content looks like HTML, aborting."
             head -n 20 "$tmp"
             exit 2
           fi
 
-          cat "$tmp" > "公选课/README.md"
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Commit if changed
-        id: commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- "公选课/README.md"; then
-            echo "No changes detected."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git add "公选课/README.md"
-          git commit -m "chore(docs): sync 公选课/README.md from HackMD"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Push branch
-        if: steps.commit.outputs.changed == 'true'
-        run: |
-          BRANCH="bot/sync-hackmd-gxk"
-          git checkout -B "$BRANCH"
-          git push -f origin "$BRANCH"
+          cat "$tmp" > "$TARGET"
 
       - name: Create or update PR
-        if: steps.commit.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: bot/sync-hackmd-gxk
+          branch: bot/sync-hackmd-csugxk
           base: main
           title: "Sync 公选课/README.md from HackMD"
           body: |
